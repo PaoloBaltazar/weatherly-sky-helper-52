@@ -114,19 +114,19 @@ const Calendar = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 overflow-hidden">
-            <div className="p-6 bg-white">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <Card className="lg:col-span-8 overflow-hidden bg-white">
+            <div className="p-6">
               <CalendarComponent
                 mode="single"
                 selected={date}
                 onSelect={handleDateSelect}
-                className="rounded-md border shadow-sm"
+                className="rounded-md"
               />
             </div>
           </Card>
 
-          <Card className="bg-white">
+          <Card className="lg:col-span-4 bg-white">
             <EventList selectedDate={date} events={events} />
           </Card>
         </div>
