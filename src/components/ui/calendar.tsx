@@ -30,10 +30,10 @@ function Calendar({
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
-        head_row: "flex w-full",
+        head_row: "flex w-full justify-between",
         head_cell:
-          "text-gray-500 rounded-md w-full font-medium text-[0.8rem] py-2",
-        row: "flex w-full mt-2",
+          "text-gray-500 w-10 font-medium text-[0.8rem] py-2",
+        row: "flex w-full mt-2 justify-between",
         cell: cn(
           "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-gray-100 dark:[&:has([aria-selected])]:bg-gray-800",
           props.mode === "range"
@@ -42,7 +42,7 @@ function Calendar({
         ),
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-9 w-full p-0 font-normal aria-selected:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          "h-9 w-10 p-0 font-normal aria-selected:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         ),
         day_range_start: "day-range-start",
         day_range_end: "day-range-end",
