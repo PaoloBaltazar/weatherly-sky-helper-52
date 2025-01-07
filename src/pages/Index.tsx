@@ -1,114 +1,129 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { WeatherCard } from "@/components/WeatherCard";
-import { ForecastCard } from "@/components/ForecastCard";
-import { CitySearch } from "@/components/CitySearch";
-import { ApiKeyInput } from "@/components/ApiKeyInput";
-import { fetchWeather, fetchForecast } from "@/services/weatherService";
-import { useToast } from "@/components/ui/use-toast";
+import { useEffect, useState } from "react";
+import { Layout } from "@/components/Layout";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { TaskList } from "@/components/dashboard/TaskList";
+import { TaskForm } from "@/components/dashboard/TaskForm";
+import { CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Task } from "@/types/task";
+import { supabase } from "@/lib/supabase";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
-  const [city, setCity] = useState("London");
-  const [apiKey, setApiKey] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const {
-    data: weatherData,
-    isLoading: weatherLoading,
-    error: weatherError,
-  } = useQuery({
-    queryKey: ["weather", city, apiKey],
-    queryFn: () => fetchWeather(city, apiKey),
-    enabled: !!apiKey,
-  });
-
-  const {
-    data: forecastData,
-    isLoading: forecastLoading,
-    error: forecastError,
-  } = useQuery({
-    queryKey: ["forecast", city, apiKey],
-    queryFn: () => fetchForecast(city, apiKey),
-    enabled: !!apiKey,
-  });
-
-  const handleSearch = (newCity: string) => {
-    if (!apiKey) {
+  const fetchTasks = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate('/login');
       toast({
-        title: "API Key Required",
-        description: "Please enter your OpenWeatherMap API key first.",
+        title: "Authentication required",
+        description: "Please log in to access the dashboard",
         variant: "destructive",
       });
-      return;
+    } else {
+      // Fetch tasks for the authenticated user
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to fetch tasks",
+          variant: "destructive",
+        });
+      } else {
+        // Cast the data to Task[] type since we know the structure matches
+        const tasksWithCorrectTypes = (data || []).map(task => ({
+          ...task,
+          priority: task.priority as Task["priority"],
+          status: task.status as Task["status"]
+        })) satisfies Task[];
+        
+        setTasks(tasksWithCorrectTypes);
+      }
     }
-    setCity(newCity);
   };
 
-  const getDayForecast = () => {
-    if (!forecastData) return [];
-    const dailyData = new Map();
-    
-    forecastData.list.forEach((item) => {
-      const date = new Date(item.dt * 1000).toLocaleDateString();
-      if (!dailyData.has(date)) {
-        dailyData.set(date, {
-          tempMin: item.main.temp_min,
-          tempMax: item.main.temp_max,
-          icon: item.weather[0].icon,
-          description: item.weather[0].main,
-        });
+  useEffect(() => {
+    fetchTasks();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        navigate('/login');
       }
     });
 
-    return Array.from(dailyData.entries()).slice(0, 5);
+    return () => subscription.unsubscribe();
+  }, [navigate, toast]);
+
+  const handleStatusChange = (taskId: string, newStatus: Task["status"]) => {
+    setTasks(tasks.map(task => 
+      task.id === taskId ? { ...task, status: newStatus } : task
+    ));
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-weather-gradient-start to-weather-gradient-end">
-      <div className="container py-8 px-4">
-        <h1 className="text-3xl font-bold text-center mb-8">Weather Dashboard</h1>
-        
-        <div className="max-w-4xl mx-auto space-y-6">
-          <ApiKeyInput onApiKeyChange={setApiKey} />
-          
-          <div className="flex justify-center">
-            <CitySearch
-              onSearch={handleSearch}
-              disabled={!apiKey || weatherLoading}
-            />
-          </div>
+  const handleTaskCreated = (newTask: Task) => {
+    setTasks(prevTasks => [newTask, ...prevTasks]);
+  };
 
-          {!apiKey ? (
-            <p className="text-center text-gray-500">
-              Please enter your API key to start
-            </p>
-          ) : weatherError || forecastError ? (
-            <p className="text-center text-red-500">
-              Error fetching weather data. Please check your API key and try again.
-            </p>
-          ) : weatherLoading || forecastLoading ? (
-            <p className="text-center">Loading weather data...</p>
-          ) : weatherData ? (
-            <>
-              <WeatherCard data={weatherData} />
-              
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {getDayForecast().map(([date, data]) => (
-                  <ForecastCard
-                    key={date}
-                    date={date}
-                    icon={data.icon}
-                    description={data.description}
-                    tempMin={data.tempMin}
-                    tempMax={data.tempMax}
-                  />
-                ))}
-              </div>
-            </>
-          ) : null}
+  const pendingTasks = tasks.filter(task => task.status === "pending").length;
+  const inProgressTasks = tasks.filter(task => task.status === "in-progress").length;
+  const completedTasks = tasks.filter(task => task.status === "completed").length;
+
+  return (
+    <Layout>
+      <div className="space-y-6 md:space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-0">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-600 mt-1 text-sm md:text-base">Welcome back, HR Manager</p>
+          </div>
+          <TaskForm onTaskCreated={handleTaskCreated} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <StatCard
+            title="Pending Tasks"
+            value={pendingTasks}
+            icon={<Clock className="w-6 h-6 md:w-8 md:h-8" />}
+            description={pendingTasks === 1 ? "1 task pending" : `${pendingTasks} tasks pending`}
+          />
+          <StatCard
+            title="In Progress"
+            value={inProgressTasks}
+            icon={<AlertCircle className="w-6 h-6 md:w-8 md:h-8" />}
+            description={inProgressTasks === 1 ? "1 task in progress" : `${inProgressTasks} tasks in progress`}
+          />
+          <StatCard
+            title="Completed"
+            value={completedTasks}
+            icon={<CheckCircle2 className="w-6 h-6 md:w-8 md:h-8" />}
+            description={completedTasks === 1 ? "1 task completed" : `${completedTasks} tasks completed`}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <TaskList 
+            title="My Tasks" 
+            tasks={tasks.filter(task => task.status !== "completed")}
+            onStatusChange={handleStatusChange}
+            onTasksChange={fetchTasks}
+          />
+          <TaskList 
+            title="Completed Tasks" 
+            tasks={tasks.filter(task => task.status === "completed")}
+            onStatusChange={handleStatusChange}
+            onTasksChange={fetchTasks}
+          />
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 
